@@ -1,5 +1,6 @@
 package com.zyx.zyxojsandbox;
 
+import cn.hutool.core.date.StopWatch;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.dfa.FoundWord;
@@ -10,10 +11,12 @@ import com.zyx.zyxojsandbox.model.ExecuteMessage;
 import com.zyx.zyxojsandbox.model.JudgeInfo;
 import com.zyx.zyxojsandbox.security.DefaultSecurityManager;
 import com.zyx.zyxojsandbox.utils.ProcessUtils;
-import lombok.extern.slf4j.Slf4j;
+import org.apache.tomcat.util.http.fileupload.FileUtils;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -21,32 +24,51 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 模板模式
- *
  * @author zyx
  * @version 1.0
- * @date 2024/1/11 011 10:59
+ * @date 2024/1/8 008 16:49
  */
-@Slf4j
-public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
-
+public class JavaNativeCodeSandboxOld implements CodeSandbox {
 
     private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
 
     private static final String GLOBAL_JAVA_CLASS_NAME = "Main.java";
+
+    private static final WordTree WORD_TREE;
 
 
     /**
      * 设置时间限制
      */
     private static final long TIME_OUT_MILLIS = 5000;
-
     /**
-     * 把用户代码保存为文件
-     *
-     * @return
+     * 黑名单
      */
-    public File saveCodeToFile(String code) {
+    private static final List<String> BLANK_LIST = Arrays.asList("Files", "exec");
+
+    static {
+        //校验代码
+        WORD_TREE = new WordTree();
+        WORD_TREE.addWords(BLANK_LIST);
+
+    }
+
+    @Override
+    public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
+
+        System.setSecurityManager(new DefaultSecurityManager());
+
+        List<String> inputList = executeCodeRequest.getInputList();
+        String code = executeCodeRequest.getCode();
+        String language = executeCodeRequest.getLanguage();
+
+        //校验代码
+        FoundWord foundWord = WORD_TREE.matchWord(code);
+        if (foundWord != null) {
+            System.out.println("敏感词:" + foundWord.getFoundWord());
+            return null;
+        }
+
         String property = System.getProperty("user.dir");
         String globalCodePathName = property + File.separator + GLOBAL_CODE_DIR_NAME;
 
@@ -60,45 +82,22 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         String userCodePath = userCodeParentPath + File.separator + GLOBAL_JAVA_CLASS_NAME;
 
         File userCodeFile = FileUtil.writeString(code, userCodePath, StandardCharsets.UTF_8);
-        return userCodeFile;
-    }
 
-    /**
-     * 编译代码得到class文件
-     *
-     * @param userCodeFile
-     * @return
-     */
-    public ExecuteMessage compileFile(File userCodeFile) {
+        //编译代码，得到class文件
         String compileCmd = String.format("javac -encoding utf-8 %s", userCodeFile.getAbsolutePath());
         try {
             Process compileProcess = Runtime.getRuntime().exec(compileCmd);
             ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "编译");
             System.out.println(executeMessage);
-            if (executeMessage.getExitValue() != 0) {
-                throw new RuntimeException("编译错误");
-            }
-            return executeMessage;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            return getErrorResponse(e);
         }
-    }
 
-    /**
-     * 执行代码，得到输出结果
-     *
-     * @param userCodeFile
-     * @param inputList
-     * @return
-     */
-    public List<ExecuteMessage> runFiles(File userCodeFile, List<String> inputList) {
-
-        String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
+        //执行代码，得到输出结果
         List<ExecuteMessage> executeMessageList = new ArrayList<>();
         for (String inputArgs : inputList) {
             //Xmx限制内存
-            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s",
-                    userCodeParentPath, inputArgs);
+            String runCmd = String.format("java -Xmx256m -Dfile.encoding=UTF-8 -cp %s Main %s", userCodeParentPath, inputArgs);
 
             try {
                 Process compileProcess = Runtime.getRuntime().exec(runCmd);
@@ -113,22 +112,12 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
                 }).start();
                 ExecuteMessage executeMessage = ProcessUtils.runProcessAndGetMessage(compileProcess, "运行");
                 System.out.println(executeMessage);
-                executeMessageList.add(executeMessage);
-
             } catch (Exception e) {
-                throw new RuntimeException("程序执行异常", e);
+                return getErrorResponse(e);
             }
         }
-        return executeMessageList;
-    }
 
-    /**
-     * 整理获取输出结果
-     *
-     * @param executeMessageList
-     * @return
-     */
-    public ExecuteCodeResponse getOutputResponse(List<ExecuteMessage> executeMessageList) {
+        //收集整理输出结果
         ExecuteCodeResponse executeCodeResponse = new ExecuteCodeResponse();
         List<String> outputList = new ArrayList<>();
         //取用时最大值，判断是否超时
@@ -155,53 +144,14 @@ public abstract class JavaCodeSandboxTemplate implements CodeSandbox {
         JudgeInfo judgeInfo = new JudgeInfo();
         judgeInfo.setTime(maxTime);
         executeCodeResponse.setJudgeInfo(judgeInfo);
-        return executeCodeResponse;
-    }
-
-    /**
-     * 文件清理
-     *
-     * @param userCodeFile
-     * @return
-     */
-    public boolean deleteFile(File userCodeFile) {
-        if (userCodeFile.getParentFile().exists()) {
-            String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
-            boolean del = FileUtil.del(userCodeParentPath);
-            System.out.println("删除" + (del ? "成功" : "失败"));
-            return del;
-        }
-        return true;
-    }
-
-    @Override
-    public ExecuteCodeResponse executeCode(ExecuteCodeRequest executeCodeRequest) {
-
-        System.setSecurityManager(new DefaultSecurityManager());
-
-        List<String> inputList = executeCodeRequest.getInputList();
-        String code = executeCodeRequest.getCode();
-        String language = executeCodeRequest.getLanguage();
-
-        File userCodeFile = saveCodeToFile(code);
-
-        //编译代码，得到class文件
-        ExecuteMessage compileMessage = compileFile(userCodeFile);
-        System.out.println(compileMessage);
-
-        //执行代码，得到输出结果
-        List<ExecuteMessage> executeMessageList = runFiles(userCodeFile, inputList);
-
-        //收集整理输出结果
-        ExecuteCodeResponse outputResponse = getOutputResponse(executeMessageList);
 
         // 文件清理
-        boolean b = deleteFile(userCodeFile);
-        if (!b) {
-            log.error("deleteFile error,userCodeFilePath={}", userCodeFile.getAbsolutePath());
+        if (userCodeFile.getParentFile().exists()) {
+            boolean del = FileUtil.del(userCodeParentPath);
+            System.out.println("删除" + (del ? "成功" : "失败"));
         }
 
-        return outputResponse;
+        return executeCodeResponse;
     }
 
     /**
