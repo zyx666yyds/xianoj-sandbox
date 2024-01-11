@@ -3,8 +3,11 @@ package com.zyx.zyxojsandbox.utils;
 import cn.hutool.core.date.StopWatch;
 import cn.hutool.core.util.StrUtil;
 import com.zyx.zyxojsandbox.model.ExecuteMessage;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 进程工具类
@@ -18,101 +21,102 @@ public class ProcessUtils {
     /**
      * 执行进程并获取信息
      *
-     * @param compileProcess
+     * @param runProcess
      * @param opName
      * @return
      */
-    public static ExecuteMessage runProcessAndGetMessage(Process compileProcess, String opName) {
-        ExecuteMessage result = new ExecuteMessage();
+    public static ExecuteMessage runProcessAndGetMessage(Process runProcess, String opName) {
+        ExecuteMessage executeMessage = new ExecuteMessage();
 
         try {
             StopWatch stopWatch = new StopWatch();
             stopWatch.start();
-            int exitValue = compileProcess.waitFor();
-            result.setExitValue(exitValue);
-
+            // 等待程序执行，获取错误码
+            int exitValue = runProcess.waitFor();
+            executeMessage.setExitValue(exitValue);
+            // 正常退出
             if (exitValue == 0) {
                 System.out.println(opName + "成功");
-                //分批获取进程的正常输出
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getInputStream()));
-                StringBuilder compileOutputStringBuilder = new StringBuilder();
-                // 获取编译结果
-                String compileResult;
-                while ((compileResult = bufferedReader.readLine()) != null) {
-                    compileOutputStringBuilder.append(compileResult).append("\n");
+                // 分批获取进程的正常输出
+                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(runProcess.getInputStream()));
+                List<String> outputStrList = new ArrayList<>();
+                // 逐行读取
+                String compileOutputLine;
+                while ((compileOutputLine = bufferedReader.readLine()) != null) {
+                    outputStrList.add(compileOutputLine);
                 }
-                result.setMessage(compileOutputStringBuilder.toString());
+                executeMessage.setMessage(StringUtils.join(outputStrList, "\n"));
             } else {
-                System.out.println(opName + "失败" + exitValue);
-                //分批获取进程的正常输出
-                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getInputStream()));
-                StringBuilder compileOutputStringBuilder = new StringBuilder();
-                // 获取编译结果
-                String compileResult;
-                while ((compileResult = bufferedReader.readLine()) != null) {
-                    compileOutputStringBuilder.append(compileResult).append("\n");
+                // 异常退出
+                System.out.println(opName + "失败，错误码： " + exitValue);
+                // 分批获取进程的正常输出
+                BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(runProcess.getInputStream()));
+                List<String> outputStrList = new ArrayList<>();
+                // 逐行读取
+                String compileOutputLine;
+                while ((compileOutputLine = bufferedReader.readLine()) != null) {
+                    outputStrList.add(compileOutputLine);
                 }
+                executeMessage.setMessage(StringUtils.join(outputStrList, "\n"));
 
-                //分批获取进程的错误输出
-                BufferedReader errorBufferedReader = new BufferedReader(new InputStreamReader(compileProcess.getErrorStream()));
-                StringBuilder compileErrorOutputStringBuilder = new StringBuilder();
-                // 获取编译结果
-                String errorCompileResult;
-                while ((errorCompileResult = errorBufferedReader.readLine()) != null) {
-                    compileErrorOutputStringBuilder.append(errorCompileResult).append("\n");
+                // 分批获取进程的错误输出
+                BufferedReader errorBufferedReader = new BufferedReader(new InputStreamReader(runProcess.getErrorStream()));
+                // 逐行读取
+                List<String> errorOutputStrList = new ArrayList<>();
+                // 逐行读取
+                String errorCompileOutputLine;
+                while ((errorCompileOutputLine = errorBufferedReader.readLine()) != null) {
+                    errorOutputStrList.add(errorCompileOutputLine);
                 }
-                result.setErrorMessage(compileErrorOutputStringBuilder.toString());
-
+                executeMessage.setErrorMessage(StringUtils.join(errorOutputStrList, "\n"));
             }
             stopWatch.stop();
-            result.setTime(stopWatch.getLastTaskTimeMillis());
+            executeMessage.setTime(stopWatch.getLastTaskTimeMillis());
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
-
-        return result;
+        return executeMessage;
     }
 
     /**
      * 执行交互式进程并获取信息
      *
-     * @param compileProcess
-     * @param opName
+     * @param runProcess
+     * @param args
      * @return
      */
-    public static ExecuteMessage runReactProcessAndGetMessage(Process compileProcess, String opName, String args) {
-        ExecuteMessage result = new ExecuteMessage();
+    public static ExecuteMessage runInteractProcessAndGetMessage(Process runProcess, String args) {
+        ExecuteMessage executeMessage = new ExecuteMessage();
 
         try {
-            InputStream inputStream = compileProcess.getInputStream();
-            OutputStream outputStream = compileProcess.getOutputStream();
-
+            // 向控制台输入程序
+            OutputStream outputStream = runProcess.getOutputStream();
             OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
-
-            String[] split = args.split(",");
-            outputStreamWriter.write(StrUtil.join("\n", split) + "\n");
-
+            String[] s = args.split(" ");
+            String join = StrUtil.join("\n", s) + "\n";
+            outputStreamWriter.write(join);
+            // 相当于按了回车，执行输入的发送
             outputStreamWriter.flush();
 
-            //分批获取进程的正常输出
+            // 分批获取进程的正常输出
+            InputStream inputStream = runProcess.getInputStream();
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream));
             StringBuilder compileOutputStringBuilder = new StringBuilder();
-            // 获取编译结果
-            String compileResult;
-            while ((compileResult = bufferedReader.readLine()) != null) {
-                compileOutputStringBuilder.append(compileResult);
+            // 逐行读取
+            String compileOutputLine;
+            while ((compileOutputLine = bufferedReader.readLine()) != null) {
+                compileOutputStringBuilder.append(compileOutputLine);
             }
-            result.setMessage(compileOutputStringBuilder.toString());
-            //资源回收
-            inputStream.close();
-            outputStream.close();
+            executeMessage.setMessage(compileOutputStringBuilder.toString());
+            // 记得资源的释放，否则会卡死
             outputStreamWriter.close();
-            compileProcess.destroy();
-
+            outputStream.close();
+            inputStream.close();
+            runProcess.destroy();
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
-
-        return result;
+        return executeMessage;
     }
+
 }

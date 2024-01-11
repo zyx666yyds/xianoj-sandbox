@@ -1,25 +1,17 @@
 package com.zyx.zyxojsandbox;
 
 import cn.hutool.core.date.StopWatch;
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.resource.ResourceUtil;
 import cn.hutool.core.util.ArrayUtil;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.dfa.FoundWord;
-import cn.hutool.dfa.WordTree;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.*;
 import com.github.dockerjava.api.model.*;
 import com.github.dockerjava.core.DockerClientBuilder;
 import com.github.dockerjava.core.command.ExecStartResultCallback;
-import com.github.dockerjava.core.command.LogContainerResultCallback;
 import com.zyx.zyxojsandbox.model.ExecuteCodeRequest;
 import com.zyx.zyxojsandbox.model.ExecuteCodeResponse;
 import com.zyx.zyxojsandbox.model.ExecuteMessage;
-import com.zyx.zyxojsandbox.model.JudgeInfo;
-import com.zyx.zyxojsandbox.security.DefaultSecurityManager;
-import com.zyx.zyxojsandbox.utils.ProcessUtils;
 import org.springframework.stereotype.Component;
 
 import java.io.Closeable;
@@ -29,11 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
 /**
  * 模板模式重构docker沙箱
@@ -66,7 +54,7 @@ public class JavaDockerCodeSandbox extends JavaCodeSandboxTemplate {
      * @return
      */
     @Override
-    public List<ExecuteMessage> runFiles(File userCodeFile, List<String> inputList) {
+    public List<ExecuteMessage> runFile(File userCodeFile, List<String> inputList) {
         String userCodeParentPath = userCodeFile.getParentFile().getAbsolutePath();
         // 获取默认的 Docker Client
         DockerClient dockerClient = DockerClientBuilder.getInstance().build();

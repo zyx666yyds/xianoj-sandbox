@@ -13,6 +13,7 @@ public class DefaultSecurityManager extends SecurityManager{
     @Override
     public void checkPermission(Permission perm) {
         System.out.println("默认不做限制");
-        super.checkPermission(perm);
+        System.out.println(perm);
+        //super.checkPermission(perm);
     }
 }
