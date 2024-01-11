@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * @author zyx
@@ -17,6 +19,15 @@ import javax.annotation.Resource;
  */
 @RestController("/")
 public class MainController {
+
+    /**
+     * 请求头
+     */
+    private static final String AUTH_REQUEST_HEADER = "auth";
+    /**
+     * 密钥
+     */
+    private static final String AUTH_REQUEST_SECRET = "secretKey";
 
     @Resource
     private JavaNativeCodeSandbox javaNativeCodeSandbox;
@@ -28,12 +39,21 @@ public class MainController {
 
     /**
      * 开放api
+     *
      * @param executeCodeRequest
      * @return
      */
     @PostMapping("/executeCode")
-    public ExecuteCodeResponse executeCode(@RequestBody ExecuteCodeRequest executeCodeRequest) {
-        if (executeCodeRequest == null){
+    public ExecuteCodeResponse executeCode(@RequestBody ExecuteCodeRequest executeCodeRequest
+            , HttpServletRequest request, HttpServletResponse response) {
+        //基本认证
+        String authHeader = request.getHeader(AUTH_REQUEST_HEADER);
+        if (!authHeader.equals(AUTH_REQUEST_SECRET)) {
+            response.setStatus(403);
+            return null;
+        }
+
+        if (executeCodeRequest == null) {
             throw new NullPointerException("executeCodeRequest is null");
         }
         return javaNativeCodeSandbox.executeCode(executeCodeRequest);
