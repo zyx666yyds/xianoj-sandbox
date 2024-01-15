@@ -32,16 +32,9 @@ public class MainController {
     @Resource
     private JavaNativeCodeSandbox javaNativeCodeSandbox;
 
-    @GetMapping("/health")
-    public String getHealth() {
-        return "ok";
-    }
 
     /**
      * 开放api
-     *
-     * @param executeCodeRequest
-     * @return
      */
     @PostMapping("/executeCode")
     public ExecuteCodeResponse executeCode(@RequestBody ExecuteCodeRequest executeCodeRequest

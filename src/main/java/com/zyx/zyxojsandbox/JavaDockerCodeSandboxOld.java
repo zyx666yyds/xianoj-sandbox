@@ -32,6 +32,7 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
  * @version 1.0
  * @date 2024/1/8 008 16:49
  */
+@Deprecated
 public class JavaDockerCodeSandboxOld implements CodeSandbox {
 
     private static final String GLOBAL_CODE_DIR_NAME = "tmpCode";
